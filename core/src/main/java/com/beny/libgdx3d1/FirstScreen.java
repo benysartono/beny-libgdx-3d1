@@ -1,0 +1,479 @@
+package com.beny.libgdx3d1;
+import com.badlogic.gdx.utils.UBJsonReader;
+import com.badlogic.gdx.graphics.PerspectiveCamera;
+import com.badlogic.gdx.graphics.g3d.utils.AnimationController;
+import com.badlogic.gdx.graphics.g3d.loader.G3dModelLoader;
+import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
+import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
+import com.badlogic.gdx.graphics.g3d.ModelInstance;
+import com.badlogic.gdx.graphics.g3d.ModelBatch;
+import com.badlogic.gdx.graphics.g3d.Model;
+import com.badlogic.gdx.graphics.g3d.Environment;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.assets.AssetManager;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.math.Quaternion;
+import com.badlogic.gdx.scenes.scene2d.Stage;
+
+import com.badlogic.gdx.math.collision.BoundingBox;
+
+import com.beny.libgdx3d1.GameClient;
+
+import com.badlogic.gdx.Screen;
+
+import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.math.collision.Ray;
+import com.badlogic.gdx.math.collision.BoundingBox;
+import com.badlogic.gdx.math.Intersector;
+
+import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
+import com.badlogic.gdx.graphics.g3d.Material;
+import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
+import com.badlogic.gdx.graphics.VertexAttributes;
+import com.badlogic.gdx.utils.Array;
+
+import java.util.UUID;
+import com.google.gson.Gson;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
+/** First screen of the application. Displayed after the application is created. */
+public class FirstScreen implements Screen {
+
+	private Vector3 pos = new Vector3(); // <--- declare here
+	private AssetManager assetManager = new AssetManager();
+	private Array<ModelInstance> instances = new Array<>();
+	private Array<AnimationController> controllers = new Array<>();
+
+	private Stage stage;              // for UI overlay, optional
+	private float rotateSpeed = 90f;  // degrees per second
+	private float moveSpeed = 0.009f;     // units per second
+
+	private NetworkClient networkClient;
+
+	// 3D Rendering
+	private PerspectiveCamera camera = new PerspectiveCamera();
+	private Environment environment;
+	private ModelBatch modelBatch;
+
+	// Models
+	private Model medeaBlendModel, terrainModel, poleModel, medeaBlendModel2;
+	private ModelInstance medeaBlendInstance, terrainInstance, poleInstance;
+
+	// Models Instances
+	private ModelInstance currentInstance, modelInstance;
+
+	// Animation Controllers
+	private AnimationController medeaBlendAnimController;
+	private AnimationController currentAnimation;
+	private boolean isWalking = false;
+	private UUID uuid = UUID.randomUUID();
+	private Gson gson = new Gson();
+	private Map<String, String> message = new HashMap<>();
+
+	// Create an array to contain other models in the network
+	public ArrayList<Object[]> modelAnims = new ArrayList<>();
+	
+	
+	/*
+	 * it is used for UDP and TCP Connection
+	try {
+		networkClient = new NetworkClient();
+		networkClient.connect("localhost"); // Or server IP
+	} catch (Exception e) {
+		e.printStackTrace();
+	}
+	 */
+
+	public GameClient client = new GameClient("ws://localhost:8080");
+
+	@Override
+	public void show() {
+		Gdx.input.setInputProcessor(null);
+		client.connect();
+
+		// Prepare your screen here.
+		// camera
+		camera = new PerspectiveCamera(67, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+		camera.near = 0.1f;
+		camera.far = 300f;
+		camera.update();
+
+		// environment
+		environment = new Environment();
+		environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.8f,0.8f,0.8f,1f));
+		environment.add(new DirectionalLight().set(Color.WHITE, -1f, -0.8f, -0.2f));
+
+		modelBatch = new ModelBatch();
+
+		// load models from core/assets/models/
+		UBJsonReader reader = new UBJsonReader();
+		G3dModelLoader loader = new G3dModelLoader(reader);
+
+		ModelBuilder modelBuilder = new ModelBuilder();
+		poleModel = modelBuilder.createBox(
+				0.2f, 5f, 0.2f,  // width, height, depth
+				new Material(ColorAttribute.createDiffuse(Color.RED)),
+				VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal
+				);
+
+		poleInstance = new ModelInstance(poleModel);
+		poleInstance.transform.translate(-0.5f, 2.5f, 0f); // raise pole so base touches ground
+
+
+		// Load medea model using AssetManager
+		assetManager.load("models/MedeaBlend.g3db", Model.class);
+		assetManager.finishLoadingAsset("models/MedeaBlend.g3db");
+		medeaBlendModel = assetManager.get("models/MedeaBlend.g3db", Model.class);
+		medeaBlendInstance = new ModelInstance(medeaBlendModel);
+		medeaBlendInstance.transform.translate(0f, 0f, 0f);
+		medeaBlendInstance.transform.setToScaling(0.4f, 0.4f, 0.4f); // scale down to 2%
+		// controllers
+		medeaBlendAnimController = new AnimationController(medeaBlendInstance);
+		// start with "idle" as default
+		medeaBlendAnimController.setAnimation("Armature|Idle");
+		
+		// Load terrain model using AssetManager
+		assetManager.load("models/terrain.g3db", Model.class);
+		assetManager.finishLoadingAsset("models/terrain.g3db");
+		terrainModel = assetManager.get("models/terrain.g3db", Model.class);
+		terrainInstance = new ModelInstance(terrainModel);
+		terrainInstance.transform.translate(0f, 0f, 0f);
+		terrainInstance.transform.setToScaling(0.4f, 0.4f, 0.4f);
+
+		/*
+		for (Node node : terrainModel.nodes) {
+		    System.out.println("Node: " + node.id + " parts: " + node.parts.size);
+		}
+		 */
+		//System.out.println("Terrain meshes: " + terrainModel.meshes.size);
+
+		// instances
+
+		fitscreen(terrainInstance);
+		
+		//instances.add(poleInstance);
+		instances.add(medeaBlendInstance);
+		//instances.add(terrainInstance);
+
+		//setCurrentAnimation(medeaBlendModel, medeaBlendInstance, medeaBlendAnimController,"Armature|Idle");
+	}
+	
+	private void setCurrentAnimation(Model model, ModelInstance instance, AnimationController controller, String animId) {
+		/* preserve current transform
+		if (currentInstance != null) {
+			instance.transform.set(currentInstance.transform);
+		}
+		 */
+		//currentInstance = instance;
+		//currentAnimation = controller;
+
+
+		//if (model != null && model.animations != null && model.animations.size > 0) {
+
+		String animationId = "default".equals(animId) ? model.animations.get(0).id : animId;
+		controller.setAnimation(animationId, -1); 
+		//}
+	}
+
+	@Override
+	public void render(float delta) {
+		// Draw your screen here. "delta" is the time since last render in seconds.
+		/*
+		if(instances != null && instances.length >0) {
+			for (int n = 0; n < instances.length; n++) {
+				instances[n].transform.translate(1f, 0f, 1f);
+				instances[n].transform.setToScaling(0.4f, 0.4f, 0.4f); // scale down to 2%
+				// controllers
+				controllers[n] = new AnimationController(medeaBlendInstance);
+				// start with "idle" as default
+				controllers[n].setAnimation("Armature|Idle");
+			}
+		}
+		*/
+		
+		handleInput(delta);
+
+		if (medeaBlendAnimController != null) medeaBlendAnimController.update(delta);
+
+		Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
+
+		modelBatch.begin(camera);
+		//if (currentInstance != null) modelBatch.render(currentInstance, environment);
+		modelBatch.render(terrainInstance, environment);
+		modelBatch.render(medeaBlendInstance, environment);
+		modelBatch.render(poleInstance, environment);
+		modelBatch.end();
+
+		if (stage != null) {
+			stage.act(delta);
+			stage.draw();
+		}
+	}
+
+	private void handleInput(float delta) {
+		//if (currentInstance == null) return;
+		float speed = moveSpeed * delta; // delta = Gdx.graphics.getDeltaTime()
+		Vector3 forward = new Vector3(0f, 0f, 1f);
+		Vector3 modelPos = new Vector3();
+		pos.add(forward.scl(speed));
+
+		// --- Camera Follow (Fixed Offset) ---
+		medeaBlendInstance.transform.getTranslation(modelPos);
+
+		// Keep camera at a fixed offset relative to the model
+		camera.position.set(modelPos.x, modelPos.y+10f, modelPos.z+5f);
+
+		// Always look at the model
+		camera.lookAt(modelPos.x, modelPos.y, modelPos.z);
+		//camera.up.set(Vector3.Y); // prevent upside-down tilt
+		camera.update();
+		//}
+
+		// rotation (yaw) - using Matrix4.rotate(float x, float y, float z, float degrees)
+		if (Gdx.input.isKeyPressed(Input.Keys.A)) {
+			medeaBlendInstance.transform.rotate(0f, 1f, 0f, rotateSpeed * delta);
+			rotMessage("0f, 1f, 0f", String.valueOf(rotateSpeed * delta));
+		}
+		if (Gdx.input.isKeyPressed(Input.Keys.D)) {
+			medeaBlendInstance.transform.rotate(0f, 1f, 0f, -rotateSpeed * delta);
+			rotMessage("0f, 1f, 0f", String.valueOf(-rotateSpeed * delta));
+		}
+		if (!pos.isZero()) {
+			//currentInstance.transform.translate(pos);
+		}
+		//currentInstance.transform.translate(-moveSpeed * delta, 0f, 0f);
+
+
+		//forward vector = (0,0,-1) rotated by instance rotation quaternion
+		//Quaternion rot = new Quaternion();
+		//currentInstance.transform.getRotation(rot);
+		//forward.rot(currentInstance.transform);
+		//rot.transform(forward);   // <-- this rotates the vector by the Quaternion
+		//forward.nor();
+
+		// movement
+		if (Gdx.input.isKeyPressed(Input.Keys.W)) {
+			// Start walking if not already walking
+			if (!isWalking) {
+				medeaBlendAnimController.setAnimation("Armature|walking", -1); // -1 = loop forever
+				aniMessage("Armature|walking");
+				isWalking = true;
+			}
+
+			//			// Ray pick downward to find terrain height
+			//			Ray ray = new Ray(new Vector3(pos.x, pos.y + 50f, pos.z), Vector3.Y.cpy().scl(-1));
+			//
+			//			BoundingBox bbox = new BoundingBox();
+			//
+			//			//terrainInstance.model.meshes.first().calculateBoundingBox(bbox);
+			//			Vector3 intersection = new Vector3();
+			//			if (Intersector.intersectRayBounds(ray, bbox, intersection)) {
+			//			pos.y = intersection.y;
+			//			}
+
+			//Vector3 movement = new Vector3(forward).scl(speed);
+			medeaBlendInstance.transform.translate(pos);
+			traMessage(String.valueOf(pos));
+		}
+		else {
+			// Switch back to idle only once
+			if (isWalking) {
+				medeaBlendAnimController.setAnimation("Armature|Idle", -1);
+				aniMessage("Armature|Idle");
+				isWalking = false;
+			}
+		}
+
+
+	}
+
+	private void handleMessage(float delta, String rot, String rotSpeed, String ani, String pos) {
+		//if (currentInstance == null) return;
+		float speed = moveSpeed * delta; // delta = Gdx.graphics.getDeltaTime()
+		Vector3 forward = new Vector3(0f, 0f, 1f);
+		Vector3 modelPos = new Vector3();
+		pos.add(forward.scl(speed));
+
+		// rotation (yaw) - using Matrix4.rotate(float x, float y, float z, float degrees)
+		if (Gdx.input.isKeyPressed(Input.Keys.A)) {
+			medeaBlendInstance.transform.rotate(0f, 1f, 0f, rotateSpeed * delta);
+			rotMessage("0f, 1f, 0f", String.valueOf(rotateSpeed * delta));
+		}
+		if (Gdx.input.isKeyPressed(Input.Keys.D)) {
+			medeaBlendInstance.transform.rotate(0f, 1f, 0f, -rotateSpeed * delta);
+			rotMessage("0f, 1f, 0f", String.valueOf(-rotateSpeed * delta));
+		}
+		if (!pos.isZero()) {
+			//currentInstance.transform.translate(pos);
+		}
+		//currentInstance.transform.translate(-moveSpeed * delta, 0f, 0f);
+
+
+		//forward vector = (0,0,-1) rotated by instance rotation quaternion
+		//Quaternion rot = new Quaternion();
+		//currentInstance.transform.getRotation(rot);
+		//forward.rot(currentInstance.transform);
+		//rot.transform(forward);   // <-- this rotates the vector by the Quaternion
+		//forward.nor();
+
+		// movement
+		if (Gdx.input.isKeyPressed(Input.Keys.W)) {
+			// Start walking if not already walking
+			if (!isWalking) {
+				medeaBlendAnimController.setAnimation("Armature|walking", -1); // -1 = loop forever
+				aniMessage("Armature|walking");
+				isWalking = true;
+			}
+
+			//			// Ray pick downward to find terrain height
+			//			Ray ray = new Ray(new Vector3(pos.x, pos.y + 50f, pos.z), Vector3.Y.cpy().scl(-1));
+			//
+			//			BoundingBox bbox = new BoundingBox();
+			//
+			//			//terrainInstance.model.meshes.first().calculateBoundingBox(bbox);
+			//			Vector3 intersection = new Vector3();
+			//			if (Intersector.intersectRayBounds(ray, bbox, intersection)) {
+			//			pos.y = intersection.y;
+			//			}
+
+			//Vector3 movement = new Vector3(forward).scl(speed);
+			medeaBlendInstance.transform.translate(pos);
+			traMessage(String.valueOf(pos));
+		}
+		else {
+			// Switch back to idle only once
+			if (isWalking) {
+				medeaBlendAnimController.setAnimation("Armature|Idle", -1);
+				aniMessage("Armature|Idle");
+				isWalking = false;
+			}
+		}
+
+
+	}
+
+	
+	
+	public UUID findModelAnimByUuid(UUID uuid) {
+		if(modelAnims != null) {
+			for(Object[] modelAnim : modelAnims) {
+				if(modelAnim[1] == uuid) {
+					return uuid;
+				}
+			}
+			return null;
+		}
+	}
+	
+	public void insertModelAnims(UUID uuid) {
+		medeaBlendInstance = new ModelInstance(medeaBlendModel);
+		medeaBlendInstance.transform.translate(0f, 0f, 0f);
+		medeaBlendInstance.transform.setToScaling(0.4f, 0.4f, 0.4f); // scale down to 2%
+		// controllers
+		medeaBlendAnimController = new AnimationController(medeaBlendInstance);
+		// start with "idle" as default
+		medeaBlendAnimController.setAnimation("Armature|Idle");
+		Object[] modelAnim = {uuid, medeaBlendInstance, medeaBlendAnimController};
+	}
+	
+	public void rotMessage(String rot, String rotSpeed) {
+		message = new HashMap<>();
+		message.put("id", uuid.toString());
+		message.put("type", "rotation");
+		message.put("rot", rot);
+		message.put("rotSpeed", rotSpeed);
+		if (client.isOpen()) {
+		    client.send(gson.toJson(message));
+		}
+	}
+	
+	public void traMessage(String pos) {
+		message = new HashMap<>();
+		message.put("id", uuid.toString());
+		message.put("type", "translate");
+		message.put("pos", pos);
+		if (client.isOpen()) {
+		    client.send(gson.toJson(message));
+		}
+	}
+	
+	public void aniMessage(String ani) {
+		message = new HashMap<>();
+		message.put("id", uuid.toString());
+		message.put("type", "animation");
+		message.put("ani", ani);
+		if (client.isOpen()) {
+		    client.send(gson.toJson(message));
+		}
+	}
+
+	public void fitscreen(ModelInstance instance){
+		// Calculate model bounds
+		BoundingBox bounds = new BoundingBox();
+		instance.calculateBoundingBox(bounds);
+
+		// Get center and dimensions
+		Vector3 center = new Vector3();
+		bounds.getCenter(center);
+		Vector3 dimensions = new Vector3();
+		bounds.getDimensions(dimensions);
+
+		// Compute radius for fitting
+		float radius = dimensions.len() / 2f;
+
+		// Move camera so that model fits the screen
+		float camDistance = radius * 2.5f; // adjust multiplier for zoom level
+		camera.position.set(center.x, center.y + radius * 0.5f, center.z + camDistance);
+		camera.lookAt(center);
+		camera.update();
+
+		// Translate model so its base is at y=0
+		instance.transform.translate(-center.x, -bounds.min.y, -center.z);
+	}
+
+	@Override
+	public void resize(int width, int height) {
+		// If the window is minimized on a desktop (LWJGL3) platform, width and height are 0, which causes problems.
+		// In that case, we don't resize anything, and wait for the window to be a normal size before updating.
+		if(width <= 0 || height <= 0) return;
+
+		// Resize your screen here. The parameters represent the new window size.
+	}
+
+	@Override
+	public void pause() {
+		// Invoked when your application is paused.
+	}
+
+	@Override
+	public void resume() {
+		// Invoked when your application is resumed after pause.
+	}
+
+	@Override
+	public void hide() {
+		// This method is called when another screen replaces this one.
+	}
+
+	@Override
+	public void dispose() {
+		// Destroy screen's assets here.
+		modelBatch.dispose();
+		assetManager.dispose();
+
+		if (medeaBlendModel != null) medeaBlendModel.dispose();
+		if (terrainModel != null) terrainModel.dispose();
+		if (poleModel != null) poleModel.dispose();
+	}
+
+	public void setUuid(UUID uuid) {
+		this.uuid = uuid;
+	}
+}
