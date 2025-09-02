@@ -246,7 +246,7 @@ public class FirstScreen implements Screen {
 		medeaBlendInstance.transform.getTranslation(modelPos);
 
 		// Keep camera at a fixed offset relative to the model
-		camera.position.set(modelPos.x, modelPos.y+10f, modelPos.z+5f);
+		camera.position.set(modelPos.x, modelPos.y+30f, modelPos.z+10f);
 
 		// Always look at the model
 		camera.lookAt(modelPos.x, modelPos.y, modelPos.z);
@@ -310,7 +310,7 @@ public class FirstScreen implements Screen {
 			try {
 				pojoNetworkUpdate = gson.fromJson(raw, PojoNetworkUpdate.class);
 			} catch (Exception e) {
-				return; // not JSON or wrong shape – ignore
+				return; // not JSON or wrong shape – ignore ---
 			}
 			if (pojoNetworkUpdate != null) {
 				//if(findModelAnimByUuid(UUID.fromString(pojoNetworkUpdate.getUuid())) == null ) {
@@ -323,6 +323,7 @@ public class FirstScreen implements Screen {
 						Vector3 posSt = new Vector3();
 						medeaBlendInstance.transform.getTranslation(posSt);
 						traMessage(posSt);
+						System.out.println("POST: " + posSt);
 						insertModelAnims(netUuid);
 					}
 
@@ -334,7 +335,9 @@ public class FirstScreen implements Screen {
 						((AnimationController)findModelAnimByUuid(netUuid)[2]).setAnimation(pojoNetworkUpdate.getAni(), -1);
 					}
 					if ("translate".equals(pojoNetworkUpdate.getActType())) {
+						Vector3 posSt = new Vector3();
 						((ModelInstance)findModelAnimByUuid(netUuid)[1]).transform.translate(pojoNetworkUpdate.getPos());
+						System.out.println("POST Other: " + ((ModelInstance)findModelAnimByUuid(netUuid)[1]).transform.getTranslation(posSt));
 					}
 					if ("state".equals(pojoNetworkUpdate.getActType())) {
 						// set initial transform
