@@ -25,6 +25,7 @@ import com.beny.libgdx3d1.GameClient;
 
 import com.badlogic.gdx.Screen;
 
+import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.Ray;
 import com.badlogic.gdx.math.collision.BoundingBox;
 import com.badlogic.gdx.math.Intersector;
@@ -73,16 +74,14 @@ public class FirstScreen implements Screen {
 	private AnimationController medeaBlendAnimController;
 	private AnimationController currentAnimation;
 	private boolean isWalking = false;
-	//private UUID uuid = UUID.randomUUID();
+	private UUID uuid = UUID.randomUUID();
 	private Gson gson = new Gson();
-	private Map<String, Object> message = new HashMap<>();
+	private Map<String, String> message = new HashMap<>();
 
 	// Create an array to contain other models in the network
-	private ArrayList<Object[]> modelAnims = new ArrayList<>();
-	private PojoNetworkUpdate pojoNetworkUpdate = new PojoNetworkUpdate();
+	public ArrayList<Object[]> modelAnims = new ArrayList<>();
+	public PojoNetworkUpdate pojoNetworkUpdate = new PojoNetworkUpdate();
 
-	//private final String localClientId = UUID.randomUUID().toString();
-	private final UUID localClientId = UUID.randomUUID();
 
 	/*
 	 * it is used for UDP and TCP Connection
@@ -141,8 +140,6 @@ public class FirstScreen implements Screen {
 		medeaBlendAnimController = new AnimationController(medeaBlendInstance);
 		// start with "idle" as default
 		medeaBlendAnimController.setAnimation("Armature|Idle");
-		//stateMessage(medeaBlendInstance);
-
 
 		// Load terrain model using AssetManager
 		assetManager.load("models/terrain.g3db", Model.class);
@@ -151,7 +148,6 @@ public class FirstScreen implements Screen {
 		terrainInstance = new ModelInstance(terrainModel);
 		terrainInstance.transform.translate(0f, 0f, 0f);
 		terrainInstance.transform.setToScaling(0.4f, 0.4f, 0.4f);
-
 
 		/*
 		for (Node node : terrainModel.nodes) {
@@ -165,12 +161,10 @@ public class FirstScreen implements Screen {
 		fitscreen(terrainInstance);
 
 		//instances.add(poleInstance);
-		//instances.add(medeaBlendInstance);
-
+		instances.add(medeaBlendInstance);
 		//instances.add(terrainInstance);
 
 		//setCurrentAnimation(medeaBlendModel, medeaBlendInstance, medeaBlendAnimController,"Armature|Idle");
-
 	}
 
 	private void setCurrentAnimation(Model model, ModelInstance instance, AnimationController controller, String animId) {
@@ -193,19 +187,23 @@ public class FirstScreen implements Screen {
 	@Override
 	public void render(float delta) {
 		// Draw your screen here. "delta" is the time since last render in seconds.
+		/*
+		if(instances != null && instances.length >0) {
+			for (int n = 0; n < instances.length; n++) {
+				instances[n].transform.translate(1f, 0f, 1f);
+				instances[n].transform.setToScaling(0.4f, 0.4f, 0.4f); // scale down to 2%
+				// controllers
+				controllers[n] = new AnimationController(medeaBlendInstance);
+				// start with "idle" as default
+				controllers[n].setAnimation("Armature|Idle");
+			}
+		}
+		 */
+
 		handleInput(delta);
 		handleMessage(delta);
 
 		if (medeaBlendAnimController != null) medeaBlendAnimController.update(delta);
-
-		for(Object[] modelAnim : modelAnims) {
-			//System.out.println("Nge update: " + String.valueOf(modelAnim[2]) + " - " + System.currentTimeMillis());
-			if (modelAnim[2] != null) { 
-				AnimationController animationControllerO = (AnimationController) modelAnim[2];
-				animationControllerO.update(delta);
-			}
-		}
-
 
 		Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
@@ -215,18 +213,6 @@ public class FirstScreen implements Screen {
 		modelBatch.render(terrainInstance, environment);
 		modelBatch.render(medeaBlendInstance, environment);
 		modelBatch.render(poleInstance, environment);
-		/*
-		for (Node node : terrainModel.nodes) {
-		    System.out.println("Node: " + node.id + " parts: " + node.parts.size);
-		}
-		 */
-		for(Object[] modelAnim : modelAnims) {
-			//System.out.println("Nge render: " + String.valueOf(modelAnim[0]) + " - " + System.currentTimeMillis());
-			if((ModelInstance) modelAnim[1] != null) modelBatch.render((ModelInstance) modelAnim[1], environment);
-		}
-
-		//if(medeaBlendInstance != null) System.out.println("Nge render medeaBlendInstance: " + String.valueOf(medeaBlendInstance) + " - " + System.currentTimeMillis());
-
 		modelBatch.end();
 
 		if (stage != null) {
@@ -257,17 +243,24 @@ public class FirstScreen implements Screen {
 		// rotation (yaw) - using Matrix4.rotate(float x, float y, float z, float degrees)
 		if (Gdx.input.isKeyPressed(Input.Keys.A)) {
 			medeaBlendInstance.transform.rotate(0f, 1f, 0f, rotateSpeed * delta);
-			rotMessage(parseVector3("0f, 1f, 0f"), rotateSpeed * delta);
-			//stateMessage(medeaBlendInstance);
+			rotMessage("0f, 1f, 0f", String.valueOf(rotateSpeed * delta));
 		}
 		if (Gdx.input.isKeyPressed(Input.Keys.D)) {
 			medeaBlendInstance.transform.rotate(0f, 1f, 0f, -rotateSpeed * delta);
-			rotMessage(parseVector3("0f, 1f, 0f"), -rotateSpeed * delta);
-			//stateMessage(medeaBlendInstance);
+			rotMessage("0f, 1f, 0f", String.valueOf(-rotateSpeed * delta));
 		}
 		if (!pos.isZero()) {
 			//currentInstance.transform.translate(pos);
 		}
+		//currentInstance.transform.translate(-moveSpeed * delta, 0f, 0f);
+
+
+		//forward vector = (0,0,-1) rotated by instance rotation quaternion
+		//Quaternion rot = new Quaternion();
+		//currentInstance.transform.getRotation(rot);
+		//forward.rot(currentInstance.transform);
+		//rot.transform(forward);   // <-- this rotates the vector by the Quaternion
+		//forward.nor();
 
 		// movement
 		if (Gdx.input.isKeyPressed(Input.Keys.W)) {
@@ -275,20 +268,29 @@ public class FirstScreen implements Screen {
 			if (!isWalking) {
 				medeaBlendAnimController.setAnimation("Armature|walking", -1); // -1 = loop forever
 				aniMessage("Armature|walking");
-				//stateMessage(medeaBlendInstance);
 				isWalking = true;
 			}
 
+			//			// Ray pick downward to find terrain height
+			//			Ray ray = new Ray(new Vector3(pos.x, pos.y + 50f, pos.z), Vector3.Y.cpy().scl(-1));
+			//
+			//			BoundingBox bbox = new BoundingBox();
+			//
+			//			//terrainInstance.model.meshes.first().calculateBoundingBox(bbox);
+			//			Vector3 intersection = new Vector3();
+			//			if (Intersector.intersectRayBounds(ray, bbox, intersection)) {
+			//			pos.y = intersection.y;
+			//			}
+
+			//Vector3 movement = new Vector3(forward).scl(speed);
 			medeaBlendInstance.transform.translate(pos);
-			traMessage(pos);
-			//stateMessage(medeaBlendInstance);
+			traMessage(String.valueOf(pos));
 		}
 		else {
 			// Switch back to idle only once
 			if (isWalking) {
 				medeaBlendAnimController.setAnimation("Armature|Idle", -1);
 				aniMessage("Armature|Idle");
-				//stateMessage(medeaBlendInstance);
 				isWalking = false;
 			}
 		}
@@ -296,73 +298,39 @@ public class FirstScreen implements Screen {
 
 	}
 
-	private void handleMessage(Float delta) {
+	private void handleMessage(float delta) {
 		//if (currentInstance == null) return;
-		String raw = client.getLatestMessage();
-		if (raw == null || raw.isEmpty()) return;
-		// skip the welcome string
-		if (!raw.trim().startsWith("{")) {
-			System.out.println("Skipping non-JSON: " + raw);
-			return;
-		}
-
-		if(raw != null) {
-			try {
-				pojoNetworkUpdate = gson.fromJson(raw, PojoNetworkUpdate.class);
-			} catch (Exception e) {
-				return; // not JSON or wrong shape – ignore
-			}
-			if (pojoNetworkUpdate != null) {
-				//if(findModelAnimByUuid(UUID.fromString(pojoNetworkUpdate.getUuid())) == null ) {
-				UUID netUuid = pojoNetworkUpdate.getUuid();
-				if(findModelAnimByUuid(netUuid) == null) {
-					if(!netUuid.equals(localClientId)) { 
-						//System.out.println("Kirim stateMessage di awal");
-						//stateMessage(medeaBlendInstance);
-						// include the current position info
-						Vector3 posSt = new Vector3();
-						medeaBlendInstance.transform.getTranslation(posSt);
-						traMessage(posSt);
-						insertModelAnims(netUuid);
-					}
-
-				} else {
-					if ("rotation".equals(pojoNetworkUpdate.getActType())) {
-						((ModelInstance)findModelAnimByUuid(netUuid)[1]).transform.rotate(pojoNetworkUpdate.getRot(), pojoNetworkUpdate.getRotSpeed());
-					}
-					if ("animation".equals(pojoNetworkUpdate.getActType())) {
-						((AnimationController)findModelAnimByUuid(netUuid)[2]).setAnimation(pojoNetworkUpdate.getAni(), -1);
-					}
-					if ("translate".equals(pojoNetworkUpdate.getActType())) {
-						((ModelInstance)findModelAnimByUuid(netUuid)[1]).transform.translate(pojoNetworkUpdate.getPos());
-					}
-					if ("state".equals(pojoNetworkUpdate.getActType())) {
-						// set initial transform
-						((ModelInstance) findModelAnimByUuid(netUuid)[1])
-						.transform.translate(pojoNetworkUpdate.getPos());
-
-						// optionally handle animation
-						((AnimationController) findModelAnimByUuid(netUuid)[2])
-						.setAnimation(pojoNetworkUpdate.getAni(), -1);
-
-						// orient model toward heading
-						Vector3 heading = pojoNetworkUpdate.getHeading();
-						if (heading != null) {
-							Vector3 up = new Vector3(0f, 0f, 1f);
-							((ModelInstance) findModelAnimByUuid(netUuid)[1]).transform.setToLookAt(heading, up);
-						}
-					}
+		float speed = moveSpeed * delta; // delta = Gdx.graphics.getDeltaTime()
+		Vector3 forward = new Vector3(0f, 0f, 1f);
+		Vector3 modelPos = new Vector3();
+		pos.add(forward.scl(speed));
+		if(client.getLatestMessage() != null) {
+			if (pojoNetworkUpdate != null && pojoNetworkUpdate.getUuid() != null) {
+				pojoNetworkUpdate = gson.fromJson(client.getLatestMessage(),PojoNetworkUpdate.class);
+				if(findModelAnimByUuid(UUID.fromString(pojoNetworkUpdate.getUuid())) == null ) {
+					insertModelAnims(uuid);
 				}
 
+				if (pojoNetworkUpdate.getActType()=="rotation") {
+					((ModelInstance)findModelAnimByUuid(UUID.fromString(pojoNetworkUpdate.getUuid()))[1]).transform.rotate(parseVector3(pojoNetworkUpdate.getRot()), Float.parseFloat(pojoNetworkUpdate.getRotSpeed()) * delta);
+				}
+				if (pojoNetworkUpdate.getActType()=="animation") {
+					((AnimationController)findModelAnimByUuid(UUID.fromString(pojoNetworkUpdate.getUuid()))[2]).setAnimation(pojoNetworkUpdate.getAni(), -1);
+				}
+				if (pojoNetworkUpdate.getActType()=="translate") {
+					((ModelInstance)findModelAnimByUuid(UUID.fromString(pojoNetworkUpdate.getUuid()))[1]).transform.translate(parseVector3(pojoNetworkUpdate.getPos()));
+				}
 			}
 
 		}
 	}
 
-	public Object[] findModelAnimByUuid(UUID oUuid) {
+
+
+	public Object[] findModelAnimByUuid(UUID uuid) {
 		if(modelAnims != null) {
 			for(Object[] modelAnim : modelAnims) {
-				if(oUuid.equals(modelAnim[0])) {
+				if(modelAnim[1] == uuid) {
 					return modelAnim;
 				}
 			}
@@ -370,23 +338,21 @@ public class FirstScreen implements Screen {
 		return null;
 	}
 
-	public void insertModelAnims(UUID otherUuid) {
-		ModelInstance medeaBlendInstanceNet = new ModelInstance(medeaBlendModel);
-		//medeaBlendInstanceNet.transform.translate(0f, 0f, 0f);
-		medeaBlendInstanceNet.transform.setToScaling(0.4f, 0.4f, 0.4f); // scale down to 2%
+	public void insertModelAnims(UUID uuid) {
+		medeaBlendInstance = new ModelInstance(medeaBlendModel);
+		medeaBlendInstance.transform.translate(0f, 0f, 0f);
+		medeaBlendInstance.transform.setToScaling(0.4f, 0.4f, 0.4f); // scale down to 2%
 		// controllers
-		AnimationController medeaBlendAnimControllerNet = new AnimationController(medeaBlendInstanceNet);
+		medeaBlendAnimController = new AnimationController(medeaBlendInstance);
 		// start with "idle" as default
-		medeaBlendAnimControllerNet.setAnimation("Armature|Idle");
-		Object[] modelAnim = {otherUuid, medeaBlendInstanceNet, medeaBlendAnimControllerNet};
+		medeaBlendAnimController.setAnimation("Armature|Idle");
+		Object[] modelAnim = {uuid, medeaBlendInstance, medeaBlendAnimController};
 		modelAnims.add(modelAnim);
-		System.out.println("Inserted: " + String.valueOf(modelAnim[0]));
-
 	}
 
-	public void rotMessage(Vector3 rot, Float rotSpeed) {
+	public void rotMessage(String rot, String rotSpeed) {
 		message = new HashMap<>();
-		message.put("uuid", localClientId);
+		message.put("id", uuid.toString());
 		message.put("actType", "rotation");
 		message.put("rot", rot);
 		message.put("rotSpeed", rotSpeed);
@@ -394,10 +360,10 @@ public class FirstScreen implements Screen {
 			client.send(gson.toJson(message));
 		}
 	}
-	
-	public void traMessage(Vector3 pos) {
+
+	public void traMessage(String pos) {
 		message = new HashMap<>();
-		message.put("uuid", localClientId);
+		message.put("id", uuid.toString());
 		message.put("actType", "translate");
 		message.put("pos", pos);
 		if (client.isOpen()) {
@@ -407,41 +373,11 @@ public class FirstScreen implements Screen {
 
 	public void aniMessage(String ani) {
 		message = new HashMap<>();
-		message.put("uuid", localClientId);
+		message.put("id", uuid.toString());
 		message.put("actType", "animation");
 		message.put("ani", ani);
 		if (client.isOpen()) {
 			client.send(gson.toJson(message));
-		}
-	}
-
-	private void stateMessage(ModelInstance modelInstance) {
-		try {
-			message = new HashMap<>();
-			message.put("uuid", localClientId);
-			message.put("actType", "state");
-			
-			// include the current position info
-			Vector3 posSt = new Vector3();
-			modelInstance.transform.getTranslation(posSt);
-			message.put("pos", posSt);
-			
-			// include the current heading info
-			Quaternion rotation2 = new Quaternion();
-			modelInstance.transform.getRotation(rotation2);
-			Vector3 forward2 = new Vector3(0f, 0f, 0);
-			rotation2.transform(forward2);
-			float heading = (float)Math.toDegrees(Math.atan2(forward2.x, forward2.z));
-			message.put("heading", forward2);
-			
-			// include the current animation info
-			message.put("ani", "Armature|Idle");
-
-			if (client.isOpen()) {
-				client.send(gson.toJson(message));
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
 		}
 	}
 
@@ -504,11 +440,9 @@ public class FirstScreen implements Screen {
 		if (poleModel != null) poleModel.dispose();
 	}
 
-	/*
 	public void setUuid(UUID uuid) {
 		this.uuid = uuid;
 	}
-	 */
 
 	private Vector3 parseVector3(String str) {
 		String[] parts = str.split(",");
