@@ -11,7 +11,7 @@ public class PojoNetworkUpdate {
 	private Float rotSpeed; 
 	private String ani; 
 	private Vector3 pos;
-	private Vector3 heading;
+	private Float heading;
 	
 	public UUID getUuid() {
 		return this.uuid;
@@ -33,7 +33,7 @@ public class PojoNetworkUpdate {
 	public Vector3 getPos() {
 		return this.pos;
 	}
-	public Vector3 getHeading() {
+	public Float getHeading() {
 		return this.heading;
 	}
 
@@ -49,7 +49,7 @@ public class PojoNetworkUpdate {
 	public void setPos(Vector3 pos) {
 		this.pos = pos;
 	}
-	public void setHeading(Vector3 heading) {
+	public void setHeading(Float heading) {
 		this.heading = heading;
 	}
 	public void setUuid(UUID uuid) {

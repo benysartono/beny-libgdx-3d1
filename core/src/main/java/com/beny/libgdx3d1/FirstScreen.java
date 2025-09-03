@@ -16,6 +16,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Quaternion;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 
@@ -84,6 +85,12 @@ public class FirstScreen implements Screen {
 	//private final String localClientId = UUID.randomUUID().toString();
 	private final UUID localClientId = UUID.randomUUID();
 
+	private final Vector3 tmpPos = new Vector3();
+	private final Quaternion tmpRot = new Quaternion();
+	// Decide once how big your model should be
+	private final Vector3 baseScale = new Vector3(0.4f, 0.4f, 0.4f); 
+
+
 	/*
 	 * it is used for UDP and TCP Connection
 	try {
@@ -141,7 +148,7 @@ public class FirstScreen implements Screen {
 		medeaBlendAnimController = new AnimationController(medeaBlendInstance);
 		// start with "idle" as default
 		medeaBlendAnimController.setAnimation("Armature|Idle");
-		//stateMessage(medeaBlendInstance);
+		stateMessage(medeaBlendInstance,"Armature|Idle");
 
 
 		// Load terrain model using AssetManager
@@ -257,13 +264,11 @@ public class FirstScreen implements Screen {
 		// rotation (yaw) - using Matrix4.rotate(float x, float y, float z, float degrees)
 		if (Gdx.input.isKeyPressed(Input.Keys.A)) {
 			medeaBlendInstance.transform.rotate(0f, 1f, 0f, rotateSpeed * delta);
-			rotMessage(parseVector3("0f, 1f, 0f"), rotateSpeed * delta);
-			//stateMessage(medeaBlendInstance);
+			stateMessage(medeaBlendInstance,"Armature|walking");
 		}
 		if (Gdx.input.isKeyPressed(Input.Keys.D)) {
 			medeaBlendInstance.transform.rotate(0f, 1f, 0f, -rotateSpeed * delta);
-			rotMessage(parseVector3("0f, 1f, 0f"), -rotateSpeed * delta);
-			//stateMessage(medeaBlendInstance);
+			stateMessage(medeaBlendInstance,"Armature|walking");
 		}
 		if (!pos.isZero()) {
 			//currentInstance.transform.translate(pos);
@@ -274,21 +279,18 @@ public class FirstScreen implements Screen {
 			// Start walking if not already walking
 			if (!isWalking) {
 				medeaBlendAnimController.setAnimation("Armature|walking", -1); // -1 = loop forever
-				aniMessage("Armature|walking");
-				//stateMessage(medeaBlendInstance);
+				stateMessage(medeaBlendInstance,"Armature|walking");
 				isWalking = true;
 			}
 
 			medeaBlendInstance.transform.translate(pos);
-			traMessage(pos);
-			//stateMessage(medeaBlendInstance);
+			stateMessage(medeaBlendInstance,"Armature|walking");
 		}
 		else {
 			// Switch back to idle only once
 			if (isWalking) {
 				medeaBlendAnimController.setAnimation("Armature|Idle", -1);
-				aniMessage("Armature|Idle");
-				//stateMessage(medeaBlendInstance);
+				stateMessage(medeaBlendInstance,"Armature|Idle");
 				isWalking = false;
 			}
 		}
@@ -296,7 +298,7 @@ public class FirstScreen implements Screen {
 
 	}
 
-	private void handleMessage(Float delta) {
+	private void handleMessage(float delta) {
 		//if (currentInstance == null) return;
 		String raw = client.getLatestMessage();
 		if (raw == null || raw.isEmpty()) return;
@@ -317,46 +319,16 @@ public class FirstScreen implements Screen {
 				UUID netUuid = pojoNetworkUpdate.getUuid();
 				if(findModelAnimByUuid(netUuid) == null) {
 					if(!netUuid.equals(localClientId)) { 
-						//System.out.println("Kirim stateMessage di awal");
-						//stateMessage(medeaBlendInstance);
-						// include the current position info
-						Vector3 posSt = new Vector3();
-						medeaBlendInstance.transform.getTranslation(posSt);
-						traMessage(posSt);
-						System.out.println("POST: " + posSt);
+						System.out.println("Kirim stateMessage di awal");
+						stateMessage(medeaBlendInstance,"Armature|Idle");
 						insertModelAnims(netUuid);
 					}
-
-				} else {
-					if ("rotation".equals(pojoNetworkUpdate.getActType())) {
-						((ModelInstance)findModelAnimByUuid(netUuid)[1]).transform.rotate(pojoNetworkUpdate.getRot(), pojoNetworkUpdate.getRotSpeed());
-					}
-					if ("animation".equals(pojoNetworkUpdate.getActType())) {
-						((AnimationController)findModelAnimByUuid(netUuid)[2]).setAnimation(pojoNetworkUpdate.getAni(), -1);
-					}
-					if ("translate".equals(pojoNetworkUpdate.getActType())) {
-						Vector3 posSt = new Vector3();
-						((ModelInstance)findModelAnimByUuid(netUuid)[1]).transform.translate(pojoNetworkUpdate.getPos());
-						System.out.println("POST Other: " + ((ModelInstance)findModelAnimByUuid(netUuid)[1]).transform.getTranslation(posSt));
-					}
-					if ("state".equals(pojoNetworkUpdate.getActType())) {
-						// set initial transform
-						((ModelInstance) findModelAnimByUuid(netUuid)[1])
-						.transform.translate(pojoNetworkUpdate.getPos());
-
-						// optionally handle animation
-						((AnimationController) findModelAnimByUuid(netUuid)[2])
-						.setAnimation(pojoNetworkUpdate.getAni(), -1);
-
-						// orient model toward heading
-						Vector3 heading = pojoNetworkUpdate.getHeading();
-						if (heading != null) {
-							Vector3 up = new Vector3(0f, 0f, 1f);
-							((ModelInstance) findModelAnimByUuid(netUuid)[1]).transform.setToLookAt(heading, up);
-						}
-					}
 				}
-
+				else {
+					ModelInstance modelInstance1 = (ModelInstance) findModelAnimByUuid(netUuid)[1];
+					AnimationController animationController1 = (AnimationController) findModelAnimByUuid(netUuid)[2];
+					applyState(modelInstance1,animationController1,pojoNetworkUpdate.getPos(),pojoNetworkUpdate.getHeading(),pojoNetworkUpdate.getAni());
+				}
 			}
 
 		}
@@ -387,58 +359,28 @@ public class FirstScreen implements Screen {
 
 	}
 
-	public void rotMessage(Vector3 rot, Float rotSpeed) {
-		message = new HashMap<>();
-		message.put("uuid", localClientId);
-		message.put("actType", "rotation");
-		message.put("rot", rot);
-		message.put("rotSpeed", rotSpeed);
-		if (client.isOpen()) {
-			client.send(gson.toJson(message));
-		}
-	}
-	
-	public void traMessage(Vector3 pos) {
-		message = new HashMap<>();
-		message.put("uuid", localClientId);
-		message.put("actType", "translate");
-		message.put("pos", pos);
-		if (client.isOpen()) {
-			client.send(gson.toJson(message));
-		}
-	}
-
-	public void aniMessage(String ani) {
-		message = new HashMap<>();
-		message.put("uuid", localClientId);
-		message.put("actType", "animation");
-		message.put("ani", ani);
-		if (client.isOpen()) {
-			client.send(gson.toJson(message));
-		}
-	}
-
-	private void stateMessage(ModelInstance modelInstance) {
+	private void stateMessage(ModelInstance modelInstance, String animation) {
 		try {
 			message = new HashMap<>();
 			message.put("uuid", localClientId);
 			message.put("actType", "state");
-			
+
 			// include the current position info
 			Vector3 posSt = new Vector3();
 			modelInstance.transform.getTranslation(posSt);
 			message.put("pos", posSt);
-			
+
 			// include the current heading info
 			Quaternion rotation2 = new Quaternion();
+			//Matrix4 rotation2 = new Matrix4();
 			modelInstance.transform.getRotation(rotation2);
-			Vector3 forward2 = new Vector3(0f, 0f, 0);
+			Vector3 forward2 = new Vector3(0f, 0f, 1f);
 			rotation2.transform(forward2);
 			float heading = (float)Math.toDegrees(Math.atan2(forward2.x, forward2.z));
-			message.put("heading", forward2);
-			
+			message.put("heading", heading);
+
 			// include the current animation info
-			message.put("ani", "Armature|Idle");
+			message.put("ani", animation);
 
 			if (client.isOpen()) {
 				client.send(gson.toJson(message));
@@ -521,4 +463,24 @@ public class FirstScreen implements Screen {
 		float z = Float.parseFloat(parts[2]);
 		return new Vector3(x, y, z);
 	}
+
+	private void applyState(ModelInstance rp, AnimationController ac, Vector3 inpos,  float msgyaw, String msganim) {
+
+		// 1) build absolute translation
+		tmpPos.set(inpos.x, inpos.y, inpos.z);
+
+		// 2) build absolute rotation: yaw around Y
+		tmpRot.setEulerAngles(msgyaw, 0f, 0f); // LibGDX: yaw(Y), pitch(X), roll(Z)
+
+		// 3) compose TRS in one shot (NO cumulative ops)
+		rp.transform.set(tmpPos, tmpRot, baseScale);
+
+		// 4) animation (idempotent)
+		if (msganim != null) {
+			if (ac.current == null || !ac.current.animation.id.equals(msganim)) {
+				ac.setAnimation(msganim, -1);
+			}
+		}
+	}
 }
+
