@@ -20,7 +20,7 @@ public class GameClient extends WebSocketClient {
 
     @Override
     public void onMessage(String message) {
-        System.out.println("Received: " + message);
+        //System.out.println("Received: " + message);
         // just keep the latest JSON string
         latestMessage = message;
     }
