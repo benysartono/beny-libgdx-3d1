@@ -58,6 +58,7 @@ import java.util.ArrayList;
 import com.beny.libgdx3d1.PojoNetworkUpdate;
 
 import com.badlogic.gdx.graphics.g3d.attributes.FloatAttribute;
+import com.badlogic.gdx.math.MathUtils;
 
 
 /** First screen of the application. Displayed after the application is created. */
@@ -70,7 +71,7 @@ public class FirstScreen implements Screen {
 
 	private Stage stage;              // for UI overlay, optional
 	private float rotateSpeed = 90f;  // degrees per second
-	private float moveSpeed = 0.009f;     // units per second
+	private float moveSpeed = 0.7f;     // units per second
 
 	//private NetworkClient networkClient;
 
@@ -86,9 +87,9 @@ public class FirstScreen implements Screen {
 
 	// Models Instances
 	private ModelInstance currentInstance, modelInstance;
-	
+
 	private Terrain terrain = new HeightMapTerrain(new Pixmap(Gdx.files.internal("models/heightmap.png")), 30f);
-    private float[][] heights;
+	private float[][] heights;
 
 
 	// Animation Controllers
@@ -115,7 +116,7 @@ public class FirstScreen implements Screen {
 
 	private final BoundingBox tmpBoxA = new BoundingBox();
 	private final BoundingBox tmpBoxB = new BoundingBox();
-	
+
 
 	/*
 	 * it is used for UDP and TCP Connection
@@ -175,9 +176,9 @@ public class FirstScreen implements Screen {
 		// start with "idle" as default
 		medeaBlendAnimController.setAnimation("Armature|Idle");
 		stateAnim="Armature|Idle";
-		
+
 		terrainInstance = terrain.getModelInstance();
-		
+
 		Pixmap heightMapPixmap = new Pixmap(Gdx.files.internal("models/heightmap.png")); 
 		int w = heightMapPixmap.getWidth();
 		int h = heightMapPixmap.getHeight();
@@ -185,35 +186,34 @@ public class FirstScreen implements Screen {
 		heights = new float[w][h]; // allocate height array
 
 		for (int x = 0; x < w; x++) {
-		    for (int y = 0; y < h; y++) {
-		        int pixel = heightMapPixmap.getPixel(x, y);
-		        float r = ((pixel >> 24) & 0xff) / 255f; // extract red channel
-		        heights[x][y] = r * maxHeight; // scale by maxHeight
-		    }
+			for (int y = 0; y < h; y++) {
+				int pixel = heightMapPixmap.getPixel(x, y);
+				float r = ((pixel >> 24) & 0xff) / 255f; // extract red channel
+				heights[x][y] = r * maxHeight; // scale by maxHeight
+			}
 		}
 
 	}
 
-    public float getTerrainHeight(float worldX, float worldZ) {
-    	int x = (int) worldX;
-        int z = (int) worldZ;
+	public float getTerrainHeight(float worldX, float worldZ) {
+		int x0 = (int) worldX;
+		int z0 = (int) worldZ;
+		int x1 = x0 + 1;
+		int z1 = z0 + 1;
 
-        if (x < 0 || z < 0 || x >= heights.length - 1 || z >= heights[0].length - 1) {
-            return 0f; // outside terrain
-        }
+		float sx = worldX - x0;
+		float sz = worldZ - z0;
 
-        float h1 = heights[x][z];
-        float h2 = heights[x + 1][z];
-        float h3 = heights[x][z + 1];
-        float h4 = heights[x + 1][z + 1];
+		float h00 = heights[x0][z0];
+		float h10 = heights[x1][z0];
+		float h01 = heights[x0][z1];
+		float h11 = heights[x1][z1];
 
-        float fx = worldX - x;
-        float fz = worldZ - z;
+		float h0 = MathUtils.lerp(h00, h10, sx);
+		float h1 = MathUtils.lerp(h01, h11, sx);
 
-        float hTop = h1 * (1 - fx) + h2 * fx;
-        float hBottom = h3 * (1 - fx) + h4 * fx;
-        return hTop * (1 - fz) + hBottom * fz;
-    }
+		return MathUtils.lerp(h0, h1, sz);
+	}
 
 	private void setCurrentAnimation(Model model, ModelInstance instance, AnimationController controller, String animId) {
 		/* preserve current transform
@@ -237,6 +237,7 @@ public class FirstScreen implements Screen {
 		// Draw your screen here. "delta" is the time since last render in seconds.
 		handleInput(delta);
 		handleMessage(delta);
+
 
 		stateMessage(medeaBlendInstance,stateAnim);
 		if (medeaBlendAnimController != null) medeaBlendAnimController.update(delta);
@@ -274,7 +275,7 @@ public class FirstScreen implements Screen {
 			stage.draw();
 		}
 	}
-																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																																										
+
 	private void handleInput(float delta) {
 		//if (currentInstance == null) return;
 		float speed = moveSpeed * delta; // delta = Gdx.graphics.getDeltaTime()
@@ -316,12 +317,14 @@ public class FirstScreen implements Screen {
 				isWalking = true;
 			}
 			//float speed = moveSpeed * delta; // delta = Gdx.graphics.getDeltaTime()
-			pos.x += speed;
-			pos.z += speed;
+			pos.x += moveSpeed * delta;
+			pos.z += moveSpeed * delta;
 			// lock character to terrain height
 			float terrainY = getTerrainHeight(pos.x, pos.z);
-			medeaBlendInstance.transform.setTranslation(pos.x, terrainY, pos.z);
+			float footOffset = 1.0f; // adjust to your model height
+			medeaBlendInstance.transform.setTranslation(pos.x, terrainY+footOffset, pos.z);
 			stateAnim = "Armature|walking";
+			Gdx.app.log("Player ", "pos= " + pos + " groundY= " + terrainY);
 		}
 		else {
 			// Switch back to idle only once
@@ -486,8 +489,8 @@ public class FirstScreen implements Screen {
 		if (medeaBlendModel != null) medeaBlendModel.dispose();
 		if (terrainModel != null) terrainModel.dispose();
 		if (poleModel != null) poleModel.dispose();
-	    if (terrainTexture != null) terrainTexture.dispose();
-	    modelBatch.dispose();
+		if (terrainTexture != null) terrainTexture.dispose();
+		modelBatch.dispose();
 		//heightMap.dispose();
 		//if(modelAnims != null) modelAnims.dispose();
 	}
